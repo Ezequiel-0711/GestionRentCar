@@ -44,12 +44,20 @@ export function Rentas() {
   async function loadData() {
     try {
       let rentasQuery = supabase.from('rentas').select(`
-          *,
-          vehiculos(descripcion, numero_placa, precio_por_dia),
-          clientes(nombre),
-          empleados(nombre),
-          inspecciones(id)
-        `).eq('estado', true)
+    *,
+    vehiculos!inner(descripcion, numero_placa, precio_por_dia),
+    clientes!inner(nombre),
+    empleados!inner(nombre),
+    inspecciones(id)
+  `).eq('estado', true)
+
+if (!isSuperAdmin && tenantId) {
+  rentasQuery = rentasQuery
+    .eq('tenant_id', tenantId)
+    .eq('vehiculos.tenant_id', tenantId)
+    .eq('clientes.tenant_id', tenantId)
+    .eq('empleados.tenant_id', tenantId)
+}
       
       let vehiculosQuery = supabase.from('vehiculos').select('*').eq('estado', true).eq('disponible', true)
       let clientesQuery = supabase.from('clientes').select('*').eq('estado', true)
@@ -158,6 +166,8 @@ export function Rentas() {
         .from('vehiculos')
         .update({ disponible: false })
         .eq('id', formData.vehiculo_id)
+
+        
 
       setIsModalOpen(false)
       await loadData()

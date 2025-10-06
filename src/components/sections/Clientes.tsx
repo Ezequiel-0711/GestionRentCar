@@ -45,8 +45,9 @@ export function Clientes() {
     try {
       let query = supabase
         .from('clientes')
-        .select('*')
-        .order('nombre')
+  .select('*')
+  .eq('estado', true)
+  .order('nombre')
       
       // Solo filtrar por tenant_id si no es superadmin Y si tenantId existe
       if (!isSuperAdmin && tenantId) {
