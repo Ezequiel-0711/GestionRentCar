@@ -37,6 +37,7 @@ export function useUserRole() {
           .eq('is_active', true)
           .single()
 
+
         if (error || !data) {
           // Si la tabla no existe o no hay datos, usar rol por defecto
           if (error?.message?.includes('Could not find the table')) {

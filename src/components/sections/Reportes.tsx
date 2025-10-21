@@ -7,6 +7,7 @@ import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { LoadingSpinner } from '../ui/LoadingSpinner'
 
+
 interface ReporteData {
   rentas: any[]
   totalRentas: number
@@ -35,7 +36,6 @@ export function Reportes() {
 
   useEffect(() => {
     loadOptions()
-    // Cargar reporte inicial con fechas del mes actual
     const hoy = new Date()
     const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
     const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
@@ -106,12 +106,10 @@ export function Reportes() {
         .gte('fecha_renta', filtros.fechaInicio)
         .lte('fecha_renta', filtros.fechaFin)
 
-      // Filtrar por tenant si no es superadmin
       if (!isSuperAdmin && tenantId) {
         query = query.eq('tenant_id', tenantId)
       }
 
-      // Aplicar filtros adicionales
       if (estadoRenta) {
         query = query.eq('estado_renta', estadoRenta)
       }
@@ -139,7 +137,6 @@ export function Reportes() {
         return
       }
 
-      // Filtrar por tipo de vehículo si está seleccionado
       let rentasFiltradas = rentas
       if (filtros.tipoVehiculo) {
         rentasFiltradas = rentas.filter(renta => 
@@ -147,15 +144,9 @@ export function Reportes() {
         )
       }
 
-      // Calcular estadísticas
       const totalRentas = rentasFiltradas.length
       const ingresoTotal = rentasFiltradas.reduce((sum, r) => sum + r.monto_total, 0)
 
-      // Calcular promedio por día
-      const diasTotales = rentasFiltradas.reduce((sum, r) => sum + r.cantidad_dias, 0)
-      const promedioIngresoPorDia = diasTotales > 0 ? ingresoTotal / diasTotales : 0
-
-      // Vehículo más rentado
       const vehiculoStats = rentasFiltradas.reduce((acc, renta) => {
         const vehiculoId = renta.vehiculo_id
         if (!acc[vehiculoId]) {
@@ -173,7 +164,6 @@ export function Reportes() {
       const vehiculoMasRentado = Object.values(vehiculoStats).reduce((max: any, current: any) => 
         !max || current.count > max.count ? current : max, null)
 
-      // Cliente más frecuente
       const clienteStats = rentasFiltradas.reduce((acc, renta) => {
         const clienteId = renta.cliente_id
         if (!acc[clienteId]) {
@@ -191,7 +181,6 @@ export function Reportes() {
       const clienteFrecuente = Object.values(clienteStats).reduce((max: any, current: any) => 
         !max || current.count > max.count ? current : max, null)
 
-      // Empleado destacado
       const empleadoStats = rentasFiltradas.reduce((acc, renta) => {
         const empleadoId = renta.empleado_id
         if (!acc[empleadoId]) {
@@ -250,39 +239,467 @@ export function Reportes() {
   }
 
   function exportarReporte() {
-    if (!reporteData) return
+    if (!reporteData || reporteData.rentas.length === 0) {
+      alert('No hay datos para exportar')
+      return
+    }
 
-    const csvContent = [
-      ['Número Renta', 'Fecha', 'Cliente', 'Vehículo', 'Empleado', 'Días', 'Monto Total', 'Estado'].join(','),
-      ...reporteData.rentas.map(renta => [
-        renta.numero_renta,
-        renta.fecha_renta,
-        renta.clientes?.nombre,
-        `"${renta.vehiculos?.descripcion} - ${renta.vehiculos?.numero_placa}"`,
-        renta.empleados?.nombre,
-        renta.cantidad_dias,
-        renta.monto_total,
-        renta.estado_renta
-      ].join(','))
+    // BOM para UTF-8 (para que Excel reconozca los caracteres especiales)
+    const BOM = '\uFEFF'
+    
+    // Encabezados
+    const headers = [
+      'Numero de Renta',
+      'Fecha de Renta',
+      'Cliente',
+      'Vehiculo',
+      'Placa',
+      'Empleado',
+      'Cantidad de Dias',
+      'Monto por Dia',
+      'Monto Total',
+      'Estado'
+    ]
+
+    // Función para escapar valores CSV
+    const escapeCsvValue = (value: any): string => {
+      if (value === null || value === undefined) return ''
+      const stringValue = String(value)
+      // Si contiene coma, comilla o salto de línea, envolver en comillas y escapar comillas internas
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`
+      }
+      return stringValue
+    }
+
+    // Crear filas de datos
+    const rows = reporteData.rentas.map(renta => [
+      escapeCsvValue(renta.numero_renta),
+      escapeCsvValue(new Date(renta.fecha_renta).toLocaleDateString('es-DO')),
+      escapeCsvValue(renta.clientes?.nombre || 'N/A'),
+      escapeCsvValue(renta.vehiculos?.descripcion || 'N/A'),
+      escapeCsvValue(renta.vehiculos?.numero_placa || 'N/A'),
+      escapeCsvValue(renta.empleados?.nombre || 'N/A'),
+      escapeCsvValue(renta.cantidad_dias),
+      escapeCsvValue(renta.monto_por_dia.toFixed(2)),
+      escapeCsvValue(renta.monto_total.toFixed(2)),
+      escapeCsvValue(renta.estado_renta)
+    ])
+
+    // Agregar fila de resumen
+    rows.push([]) // Fila vacía
+    rows.push(['RESUMEN DEL REPORTE'])
+    rows.push(['Total de Rentas:', reporteData.totalRentas])
+    rows.push(['Ingresos Total:', `$${reporteData.ingresoTotal.toFixed(2)}`])
+    rows.push(['Promedio por Renta:', `$${(reporteData.ingresoTotal / reporteData.totalRentas).toFixed(2)}`])
+    
+    if (reporteData.vehiculoMasRentado) {
+      rows.push([])
+      rows.push(['Vehiculo Mas Rentado:', reporteData.vehiculoMasRentado.vehiculo?.descripcion])
+      rows.push(['Cantidad de Rentas:', reporteData.vehiculoMasRentado.count])
+    }
+
+    if (reporteData.clienteFrecuente) {
+      rows.push([])
+      rows.push(['Cliente Mas Frecuente:', reporteData.clienteFrecuente.cliente?.nombre])
+      rows.push(['Cantidad de Rentas:', reporteData.clienteFrecuente.count])
+    }
+
+    if (reporteData.empleadoDestacado) {
+      rows.push([])
+      rows.push(['Empleado Destacado:', reporteData.empleadoDestacado.empleado?.nombre])
+      rows.push(['Cantidad de Rentas:', reporteData.empleadoDestacado.count])
+    }
+
+    // Construir CSV
+    const csvContent = BOM + [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
     ].join('\n')
 
-    const blob = new Blob([csvContent], { type: 'text/csv' })
+    // Crear y descargar archivo
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `reporte-rentas-${filtros.fechaInicio}-a-${filtros.fechaFin}.csv`
-    a.click()
+    const link = document.createElement('a')
+    link.href = url
+    
+    const fechaInicio = new Date(filtros.fechaInicio).toLocaleDateString('es-DO').replace(/\//g, '-')
+    const fechaFin = new Date(filtros.fechaFin).toLocaleDateString('es-DO').replace(/\//g, '-')
+    link.download = `Reporte_Rentas_${fechaInicio}_a_${fechaFin}.csv`
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
+  }
+
+  function exportarPDF() {
+    if (!reporteData || reporteData.rentas.length === 0) {
+      alert('No hay datos para exportar')
+      return
+    }
+
+    const fechaInicio = new Date(filtros.fechaInicio).toLocaleDateString('es-DO')
+    const fechaFin = new Date(filtros.fechaFin).toLocaleDateString('es-DO')
+    
+    // Crear ventana de impresión
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      alert('Por favor permite las ventanas emergentes para generar el PDF')
+      return
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte de Rentas - ${fechaInicio} a ${fechaFin}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      color: #333;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 20px;
+    }
+    
+    .header h1 {
+      color: #1e40af;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header .period {
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .summary-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .summary-card:nth-child(1) {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+    
+    .summary-card:nth-child(2) {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    
+    .summary-card:nth-child(3) {
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    }
+    
+    .summary-card:nth-child(4) {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    .summary-card .label {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-bottom: 5px;
+    }
+    
+    .summary-card .value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+    
+    .highlights {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .highlight-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    
+    .highlight-card h3 {
+      color: #1f2937;
+      font-size: 14px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #3b82f6;
+      padding-bottom: 5px;
+    }
+    
+    .highlight-card .name {
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 3px;
+    }
+    
+    .highlight-card .detail {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    
+    .highlight-card .stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    
+    .highlight-card .stats span {
+      color: #10b981;
+      font-weight: bold;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    thead {
+      background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+      color: white;
+    }
+    
+    th {
+      padding: 12px 8px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 12px;
+    }
+    
+    tbody tr:hover {
+      background-color: #f9fafb;
+    }
+    
+    tbody tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    
+    .status-activa {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .status-devuelta {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    
+    .status-vencida {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 12px;
+    }
+    
+    .amount {
+      color: #10b981;
+      font-weight: bold;
+    }
+    
+    @media print {
+      body {
+        padding: 20px;
+      }
+      
+      .summary-grid {
+        page-break-inside: avoid;
+      }
+      
+      table {
+        page-break-inside: auto;
+      }
+      
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Reporte de Rentas</h1>
+    <p class="period">Período: ${fechaInicio} - ${fechaFin}</p>
+    <p class="period">Generado el: ${new Date().toLocaleString('es-DO')}</p>
+  </div>
+  
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="label">Total Rentas</div>
+      <div class="value">${reporteData.totalRentas}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Ingresos Total</div>
+      <div class="value">${reporteData.ingresoTotal.toFixed(2)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Promedio/Renta</div>
+      <div class="value">${(reporteData.ingresoTotal / reporteData.totalRentas).toFixed(2)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Días Totales</div>
+      <div class="value">${reporteData.rentas.reduce((sum, r) => sum + r.cantidad_dias, 0)}</div>
+    </div>
+  </div>
+  
+  <div class="highlights">
+    ${reporteData.vehiculoMasRentado ? `
+    <div class="highlight-card">
+      <h3>🚗 Vehículo Más Rentado</h3>
+      <div class="name">${reporteData.vehiculoMasRentado.vehiculo?.descripcion || 'N/A'}</div>
+      <div class="detail">${reporteData.vehiculoMasRentado.vehiculo?.numero_placa || ''}</div>
+      <div class="stats">
+        <span>${reporteData.vehiculoMasRentado.count} rentas</span>
+        <span>${reporteData.vehiculoMasRentado.ingresos.toFixed(2)}</span>
+      </div>
+    </div>
+    ` : ''}
+    
+    ${reporteData.clienteFrecuente ? `
+    <div class="highlight-card">
+      <h3>👤 Cliente Más Frecuente</h3>
+      <div class="name">${reporteData.clienteFrecuente.cliente?.nombre || 'N/A'}</div>
+      <div class="detail">${reporteData.clienteFrecuente.cliente?.cedula || ''}</div>
+      <div class="stats">
+        <span>${reporteData.clienteFrecuente.count} rentas</span>
+        <span>${reporteData.clienteFrecuente.ingresos.toFixed(2)}</span>
+      </div>
+    </div>
+    ` : ''}
+    
+    ${reporteData.empleadoDestacado ? `
+    <div class="highlight-card">
+      <h3>⭐ Empleado Destacado</h3>
+      <div class="name">${reporteData.empleadoDestacado.empleado?.nombre || 'N/A'}</div>
+      <div class="detail">${reporteData.empleadoDestacado.empleado?.cedula || ''}</div>
+      <div class="stats">
+        <span>${reporteData.empleadoDestacado.count} rentas</span>
+        <span>${reporteData.empleadoDestacado.ingresos.toFixed(2)}</span>
+      </div>
+    </div>
+    ` : ''}
+  </div>
+  
+  <h2 style="color: #1f2937; margin-top: 30px; margin-bottom: 15px; font-size: 18px;">Detalle de Rentas</h2>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>Número</th>
+        <th>Fecha</th>
+        <th>Cliente</th>
+        <th>Vehículo</th>
+        <th>Empleado</th>
+        <th>Días</th>
+        <th>Total</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${reporteData.rentas.map(renta => `
+        <tr>
+          <td>${renta.numero_renta}</td>
+          <td>${new Date(renta.fecha_renta).toLocaleDateString('es-DO')}</td>
+          <td>${renta.clientes?.nombre || 'N/A'}</td>
+          <td>${renta.vehiculos?.descripcion || 'N/A'} - ${renta.vehiculos?.numero_placa || ''}</td>
+          <td>${renta.empleados?.nombre || 'N/A'}</td>
+          <td>${renta.cantidad_dias}</td>
+          <td class="amount">${renta.monto_total.toFixed(2)}</td>
+          <td>
+            <span class="status status-${renta.estado_renta.toLowerCase()}">
+              ${renta.estado_renta}
+            </span>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+  
+  <div class="footer">
+    <p><strong>Sistema de Gestión de Rentas de Vehículos</strong></p>
+    <p>Este documento es un reporte generado automáticamente</p>
+  </div>
+  
+  <script>
+    window.onload = function() {
+      window.print();
+      window.onafterprint = function() {
+        window.close();
+      }
+    }
+  </script>
+</body>
+</html>
+    `
+
+    printWindow.document.write(html)
+    printWindow.document.close()
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Reportes y Consultas</h1>
-        <Button onClick={exportarReporte} disabled={!reporteData}>
-          <Download className="w-4 h-4 mr-2" />
-          Exportar CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={exportarPDF} disabled={!reporteData || reporteData.rentas.length === 0} variant="secondary">
+            <FileText className="w-4 h-4 mr-2" />
+            Exportar PDF
+          </Button>
+          <Button onClick={exportarReporte} disabled={!reporteData || reporteData.rentas.length === 0}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar CSV
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg p-6">

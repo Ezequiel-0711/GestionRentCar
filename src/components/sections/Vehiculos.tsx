@@ -345,91 +345,128 @@ export function Vehiculos() {
         </div>
       )}
 
-      <Modal
+      {<Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingVehiculo ? 'Editar Vehículo' : 'Nuevo Vehículo'}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Primera fila: Descripción y Precio */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Descripción"
               value={formData.descripcion}
               onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
               required
+              placeholder="Ej: Toyota Corolla 2023"
             />
             <Input
               label="Precio por Día ($)"
               type="number"
               step="0.01"
+              min="0"
               value={formData.precio_por_dia}
-              onChange={(e) => setFormData({ ...formData, precio_por_dia: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value
+                // Solo permitir números positivos o vacío
+                if (value === '' || parseFloat(value) >= 0) {
+                  setFormData({ ...formData, precio_por_dia: value })
+                }
+              }}
+              onKeyDown={(e) => {
+                // Prevenir el signo menos
+                if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+                  e.preventDefault()
+                }
+              }}
               required
+              placeholder="0.00"
             />
+          </div>
+
+          {/* Segunda fila: Identificadores del vehículo */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Input
               label="Número de Chasis"
               value={formData.numero_chasis}
               onChange={(e) => setFormData({ ...formData, numero_chasis: e.target.value })}
               required
+              placeholder="ABC123456789"
             />
             <Input
               label="Número de Motor"
               value={formData.numero_motor}
               onChange={(e) => setFormData({ ...formData, numero_motor: e.target.value })}
               required
+              placeholder="XYZ789456"
             />
             <Input
               label="Número de Placa"
               value={formData.numero_placa}
               onChange={(e) => setFormData({ ...formData, numero_placa: e.target.value })}
               required
-            />
-            <Input
-              label="URL de Imagen"
-              value={formData.imagen_url}
-              onChange={(e) => setFormData({ ...formData, imagen_url: e.target.value })}
-              placeholder="https://..."
+              placeholder="AB-123456"
             />
           </div>
 
-          {tiposVehiculos.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                label="Tipo de Vehículo"
-                value={formData.tipo_vehiculo_id}
-                onChange={(e) => setFormData({ ...formData, tipo_vehiculo_id: e.target.value })}
-                options={tiposVehiculos.map(tipo => ({ value: tipo.id, label: tipo.descripcion }))}
-              />
-              <Select
-                label="Tipo de Combustible"
-                value={formData.tipo_combustible_id}
-                onChange={(e) => setFormData({ ...formData, tipo_combustible_id: e.target.value })}
-                options={tiposCombustible.map(tipo => ({ value: tipo.id, label: tipo.descripcion }))}
-              />
-            </div>
-          )}
+          {/* Tercera fila: Tipo, Marca, Modelo, Combustible */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Tipo de Vehículo"
+              value={formData.tipo_vehiculo_id}
+              onChange={(e) => setFormData({ ...formData, tipo_vehiculo_id: e.target.value })}
+              options={[
+                { value: '', label: 'Seleccionar tipo...' },
+                ...tiposVehiculos.map(tipo => ({ value: tipo.id, label: tipo.descripcion }))
+              ]}
+            />
+            <Select
+              label="Marca"
+              value={formData.marca_id}
+              onChange={(e) => setFormData({ ...formData, marca_id: e.target.value })}
+              options={[
+                { value: '', label: 'Seleccionar marca...' },
+                ...marcas.map(marca => ({ value: marca.id, label: marca.descripcion }))
+              ]}
+            />
+          </div>
 
-          {marcas.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                label="Marca"
-                value={formData.marca_id}
-                onChange={(e) => setFormData({ ...formData, marca_id: e.target.value })}
-                options={marcas.map(marca => ({ value: marca.id, label: marca.descripcion }))}
-              />
-              <Select
-                label="Modelo"
-                value={formData.modelo_id}
-                onChange={(e) => setFormData({ ...formData, modelo_id: e.target.value })}
-                options={modelos
+          {/* Cuarta fila: Modelo y Combustible */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Modelo"
+              value={formData.modelo_id}
+              onChange={(e) => setFormData({ ...formData, modelo_id: e.target.value })}
+              options={[
+                { value: '', label: 'Seleccionar modelo...' },
+                ...modelos
                   .filter(modelo => !formData.marca_id || modelo.marca_id === formData.marca_id)
-                  .map(modelo => ({ value: modelo.id, label: modelo.descripcion }))}
-              />
-            </div>
-          )}
+                  .map(modelo => ({ value: modelo.id, label: modelo.descripcion }))
+              ]}
+              disabled={!formData.marca_id}
+            />
+            <Select
+              label="Tipo de Combustible"
+              value={formData.tipo_combustible_id}
+              onChange={(e) => setFormData({ ...formData, tipo_combustible_id: e.target.value })}
+              options={[
+                { value: '', label: 'Seleccionar combustible...' },
+                ...tiposCombustible.map(tipo => ({ value: tipo.id, label: tipo.descripcion }))
+              ]}
+            />
+          </div>
 
-          <div className="flex space-x-4 pt-6">
+          {/* URL de Imagen */}
+          <Input
+            label="URL de Imagen (Opcional)"
+            value={formData.imagen_url}
+            onChange={(e) => setFormData({ ...formData, imagen_url: e.target.value })}
+            placeholder="https://example.com/imagen.jpg"
+          />
+
+          {/* Botones */}
+          <div className="flex space-x-4 pt-6 border-t">
             <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1">
               Cancelar
             </Button>
@@ -439,6 +476,8 @@ export function Vehiculos() {
           </div>
         </form>
       </Modal>
+      
+      }
     </div>
   )
 }

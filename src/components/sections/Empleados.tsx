@@ -155,20 +155,49 @@ export function Empleados() {
       }
 
       if (editingEmpleado) {
+        // Editando un empleado existente
         await supabase
           .from('empleados')
           .update(empleadoData)
           .eq('id', editingEmpleado.id)
       } else {
-        await supabase
+        // Verificar si existe un empleado inactivo con la misma cédula
+        let checkQuery = supabase
           .from('empleados')
-          .insert([empleadoData])
+          .select('*')
+          .eq('cedula', formData.cedula)
+          .eq('estado', false)
+        
+        if (!isSuperAdmin && tenantId) {
+          checkQuery = checkQuery.eq('tenant_id', tenantId)
+        }
+        
+        const { data: empleadoInactivo } = await checkQuery.single()
+
+        if (empleadoInactivo) {
+          // Reactivar el empleado existente con los nuevos datos
+          await supabase
+            .from('empleados')
+            .update({
+              ...empleadoData,
+              estado: true
+            })
+            .eq('id', empleadoInactivo.id)
+          
+          alert('Empleado reactivado exitosamente')
+        } else {
+          // Crear nuevo empleado
+          await supabase
+            .from('empleados')
+            .insert([empleadoData])
+        }
       }
 
       setIsModalOpen(false)
       await loadEmpleados()
     } catch (error) {
       console.error('Error saving empleado:', error)
+      alert('Error al guardar el empleado. Por favor, intente nuevamente.')
     }
   }
 
