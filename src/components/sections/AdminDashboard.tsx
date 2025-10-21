@@ -345,11 +345,11 @@ export default function AdminDashboard() {
       {/* Quick Actions */}
       <QuickActions />
 
-      {/* Vehicle Status Overview */}
+      
       <VehicleStatusOverview 
         totalVehicles={stats.totalVehicles}
         availableVehicles={stats.availableVehicles}
-      />
+      /> 
 
       {/* Resumen Financiero */}
       <FinancialSummary 
